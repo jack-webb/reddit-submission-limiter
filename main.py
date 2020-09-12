@@ -55,8 +55,6 @@ def remove_posts(post_ids: List[str]):
 def report_posts(post_ids: List[str]):
     logging.info(f"Reporting {len(post_ids)} posts")
     for post in reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids]):
-        print(post)
-        print(post.title)
         post.report(config.REPORT_MESSAGE)
 
 
