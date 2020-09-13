@@ -27,7 +27,7 @@ def main():
     logging.info(f"Logged in as {config.USERNAME}")
     subreddit: Subreddit = reddit.subreddit(config.SUBREDDIT)
 
-    for post in subreddit.stream.submissions():
+    for post in subreddit.stream.submissions(skip_existing=True):
         if post.created_utc < time.time() - config.PERIOD_HOURS * 60 * 60:
             # Ignore stream items older than the period
             continue
