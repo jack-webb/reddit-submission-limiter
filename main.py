@@ -14,7 +14,7 @@ Released under MIT license, see LICENSE file
 
 logging.basicConfig(level=logging.INFO)
 
-r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
 reddit = praw.Reddit(client_id=config.CLIENT_ID,
                      client_secret=config.CLIENT_SECRET,
                      username=config.USERNAME,
