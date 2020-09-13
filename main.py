@@ -6,6 +6,12 @@ import config
 import time
 from praw.models import Submission, Subreddit
 
+"""
+Reddit Submission Limiter by Jack Webb
+https://github.com/jack-webb/reddit-submision-limiter
+Released under MIT license, see LICENSE file
+"""
+
 logging.basicConfig(level=logging.INFO)
 
 r = redis.Redis(host="localhost", port=6379, decode_responses=True)
