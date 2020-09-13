@@ -3,8 +3,8 @@ Limits the number of submissions per user to a subreddit in a given timeframe. U
 
 ### Requirements
 - A reddit user and accompanying script app with scopes for reporting and removing posts. See the [PRAW documentation](https://praw.readthedocs.io/en/latest/index.html) for details on this.
-- A local Redis server. Support is not provided for password-protected instances.
-- Python 3 and Pipenv
+- A local [Redis](https://redis.io/) server. Support is not provided for password-protected instances.
+- Python 3 and [Pipenv](https://pipenv.pypa.io/en/latest/)
 
 ### Configuring and Running RSL
 1. Copy `config.example.py` to `config.py`
