@@ -43,7 +43,7 @@ def main():
             logging.info(f"{author} exceeded REMOVE_THRESHOLD ({config.REMOVE_THRESHOLD})")
             first, extra = get_redis_posts(author)
             if config.REPORT_ALL:
-                remove_posts(first + extra)
+                remove_posts([first] + extra)
             else:
                 report_posts(extra)
 
@@ -51,7 +51,7 @@ def main():
             logging.info(f"{author} exceeded REPORT_THRESHOLD ({config.REPORT_THRESHOLD})")
             first, extra = get_redis_posts(author)
             if config.REPORT_ALL:
-                report_posts(first + extra)
+                report_posts([first] + extra)
             else:
                 report_posts(extra)
             send_modmail_notif(author)
