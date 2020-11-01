@@ -78,7 +78,9 @@ def remove_posts(post_ids: List[str]):
     posts: Iterator[Submission] = reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids])
     for post in posts:
         logging.debug(f"Removing post {post.id} ({post.title})")
-        post.mod.remove(spam=False, mod_note=config.REMOVE_REASON)
+        post.mod.remove(spam=False, mod_note=f"(Auto) Excessive posting ({len(post_ids)} in "
+                                             f"{config.PERIOD_HOURS}h, max {config.REMOVE_THRESHOLD})"
+                        )
 
 
 def report_posts(post_ids: List[str]):
@@ -90,7 +92,10 @@ def report_posts(post_ids: List[str]):
     posts: Iterator[Submission] = reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids])
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
-        post.report(config.REPORT_MESSAGE)
+        post.report(
+            f"Excessive posting ({len(post_ids)} in {config.PERIOD_HOURS}h,"
+            f" max {config.REPORT_THRESHOLD}) | IDs {str(post_ids)}"
+        )
 
 
 def send_modmail_notif(author: str):
