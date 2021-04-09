@@ -93,8 +93,8 @@ def report_posts(post_ids: List[str]):
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
         post.report(
-            f"Excessive posting ({len(post_ids)} in {config.PERIOD_HOURS}h,"
-            f" max {config.REPORT_THRESHOLD}) | IDs {str(post_ids)}"
+            f"EP: {len(post_ids)}/{config.REPORT_THRESHOLD} in {config.PERIOD_HOURS}h"
+            f"| {str(post_ids)}"
         )
 
 
