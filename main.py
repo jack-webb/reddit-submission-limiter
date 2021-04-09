@@ -76,11 +76,16 @@ def remove_posts(post_ids: List[str]):
     """
     logging.info(f"Removing {len(post_ids)} posts")
     posts: Iterator[Submission] = reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids])
+    message_parameters = {
+        "post_ids": str(post_ids),
+        "num_posts": len(post_ids),
+        "period": config.PERIOD_HOURS,
+        "report_threshold": config.REPORT_THRESHOLD,
+        "remove_threshold": config.REMOVE_THRESHOLD,
+    }
     for post in posts:
         logging.debug(f"Removing post {post.id} ({post.title})")
-        post.mod.remove(spam=False, mod_note=f"(Auto) Excessive posting ({len(post_ids)} in "
-                                             f"{config.PERIOD_HOURS}h, max {config.REMOVE_THRESHOLD})"
-                        )
+        post.mod.remove(spam=False, mod_note=config.REMOVE_MESSAGE.format(**message_parameters))
 
 
 def report_posts(post_ids: List[str]):
@@ -90,12 +95,16 @@ def report_posts(post_ids: List[str]):
     """
     logging.info(f"Reporting {len(post_ids)} posts")
     posts: Iterator[Submission] = reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids])
+    message_parameters = {
+        "post_ids": str(post_ids),
+        "num_posts": len(post_ids),
+        "period": config.PERIOD_HOURS,
+        "report_threshold": config.REPORT_THRESHOLD,
+        "remove_threshold": config.REMOVE_THRESHOLD,
+    }
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
-        post.report(
-            f"EP: {len(post_ids)}/{config.REPORT_THRESHOLD} in {config.PERIOD_HOURS}h"
-            f"| {str(post_ids)}"
-        )
+        post.report(config.REPORT_MESSAGE.format(**message_parameters))
 
 
 def send_modmail_notif(author: str):
