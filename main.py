@@ -45,7 +45,7 @@ def main():
             if config.REPORT_ALL:
                 remove_posts([first] + extra)
             else:
-                report_posts(extra)
+                remove_posts(extra)
 
         elif num_user_posts >= config.REPORT_THRESHOLD:
             logging.info(f"{author} exceeded REPORT_THRESHOLD ({config.REPORT_THRESHOLD})")
@@ -76,13 +76,7 @@ def remove_posts(post_ids: List[str]):
     """
     logging.info(f"Removing {len(post_ids)} posts")
     posts: Iterator[Submission] = reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids])
-    message_parameters = {
-        "post_ids": str(post_ids),
-        "num_posts": len(post_ids),
-        "period": config.PERIOD_HOURS,
-        "report_threshold": config.REPORT_THRESHOLD,
-        "remove_threshold": config.REMOVE_THRESHOLD,
-    }
+    message_parameters = generate_message_params(post_ids)
     for post in posts:
         logging.debug(f"Removing post {post.id} ({post.title})")
         post.mod.remove(spam=False, mod_note=config.REMOVE_MESSAGE.format(**message_parameters))
@@ -95,13 +89,7 @@ def report_posts(post_ids: List[str]):
     """
     logging.info(f"Reporting {len(post_ids)} posts")
     posts: Iterator[Submission] = reddit.info([i if i.startswith('t3_') else f't3_{i}' for i in post_ids])
-    message_parameters = {
-        "post_ids": str(post_ids),
-        "num_posts": len(post_ids),
-        "period": config.PERIOD_HOURS,
-        "report_threshold": config.REPORT_THRESHOLD,
-        "remove_threshold": config.REMOVE_THRESHOLD,
-    }
+    message_parameters = generate_message_params(post_ids)
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
         post.report(config.REPORT_MESSAGE.format(**message_parameters))
@@ -109,6 +97,16 @@ def report_posts(post_ids: List[str]):
 
 def send_modmail_notif(author: str):
     pass
+
+
+def generate_message_params(post_ids: List[str]) -> dict:
+    return {
+        "post_ids": str(post_ids),
+        "num_posts": len(post_ids),
+        "period": config.PERIOD_HOURS,
+        "report_threshold": config.REPORT_THRESHOLD,
+        "remove_threshold": config.REMOVE_THRESHOLD,
+    }
 
 
 if __name__ == "__main__":
