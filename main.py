@@ -54,7 +54,6 @@ def main():
                 report_posts([first] + extra)
             else:
                 report_posts(extra)
-            send_modmail_notif(author)
 
 
 def get_redis_posts(author: str) -> (str, str):
@@ -93,10 +92,6 @@ def report_posts(post_ids: List[str]):
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
         post.report(config.REPORT_MESSAGE.format(**message_parameters))
-
-
-def send_modmail_notif(author: str):
-    pass
 
 
 def generate_message_params(post_ids: List[str]) -> dict:
