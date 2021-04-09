@@ -11,3 +11,11 @@ Limits the number of submissions per user to a subreddit in a given timeframe. U
 2. Fill in **all** config values. Subreddit should just be the sub's name (i.e. `AskReddit`, not `/r/AskReddit`)
 3. Run `pipenv install`
 4. Run `pipenv run python -m main`
+
+### Custom remove/report messages
+You can specify custom remove and report messages in your config. The following parameters can be used to give your messages some context. Add the parameter name inside braces (`{ }`) in your message string.
+- `post_ids` - A list of post IDs from a given user in the period, in the form `['abcd', 'wxyz', '1234']`
+- `num_posts` - The number of posts from a given user in the period
+- `period` - The number of hours in which posts are counted (same as PERIOD_HOURS in config)
+- `report_threshold` - The number of posts before new posts are reported (same as REPORT_THRESHOLD config)
+- `remove_threshold` - The number of posts before new posts are removed (same as REMOVE_THRESHOLD config)
