@@ -58,13 +58,13 @@ def main():
 
 
 def get_redis_posts(author: str) -> (str, str):
-    """Return user's first and extra post IDs
+    """Return user's first and other post IDs
 
-    Retrieve the user's first and extra post IDs from Redis,
+    Retrieve the user's first and other post IDs from Redis,
     then return them as a tuple in the form (first, extra)
 
     :param author: The username to get posts for
-    :return: Tuple of the first and extra post IDs
+    :return: Tuple of the first and other post IDs
     """
     return r.lindex(author, 0), r.lrange(author, 1, -1)
 
