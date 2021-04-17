@@ -1,5 +1,6 @@
-from typing import List, Iterator
+from typing import List, Set, Iterator
 import praw
+import prawcore
 import redis
 import logging
 import config
@@ -24,8 +25,14 @@ reddit = praw.Reddit(client_id=config.CLIENT_ID,
 
 
 def main():
-    logging.info(f"Logged in as {config.USERNAME}")
+    check_redis()
+    check_reddit_user_scopes()
     subreddit: Subreddit = reddit.subreddit(config.SUBREDDIT)
+    check_subreddit_instance(subreddit)
+
+    ready: str = f"RSL is logged in as {reddit.user.me().name} and listening in /r/{subreddit.display_name}"
+    logging.info(ready)
+    logging.info(f"=>{'~' * (len(ready) - 4)}<=")  # Pretty divider for post-init logs
 
     for post in subreddit.stream.submissions(skip_existing=True):
         if post.created_utc < time.time() - config.PERIOD_HOURS * 60 * 60:
@@ -107,6 +114,45 @@ def send_modmail(post_ids: List[str]):
     )
 
 
+# Set up checks
+def check_redis():
+    r.ping()
+    logging.debug(f"Connected to redis on {config.REDIS_HOST}:{config.REDIS_PORT}")
+
+
+def check_reddit_user_scopes():
+    scopes: dict = reddit.auth.scopes()
+    required_scopes: Set[str] = {"modposts", "report", "privatemessages"}
+    if scopes == {"*"}:
+        logging.debug(f"Logged into reddit as {config.USERNAME} with all scopes")
+    elif all(scope in scopes for scope in required_scopes):
+        logging.debug(f"Logged into reddit as {config.USERNAME} with sufficient scopes")
+    else:
+        missing_scopes: Set[str] = set(scopes) - required_scopes
+        if len(missing_scopes) == len(required_scopes):
+            raise MissingScopesException(f"Logged into reddit as {config.USERNAME}, but all scopes are missing. The "
+                                         f"bot will not work without these scopes. See the RSL documentation and "
+                                         f"https://github.com/reddit-archive/reddit/wiki/OAuth2-Quick-Start-Example\n"
+                                         f"Required scopes {required_scopes}, or *")
+        else:
+            logging.warning(f"Logged into reddit as {config.USERNAME}, but some scopes are missing. Some functionality "
+                            f"will be unavailable. Missing {missing_scopes}")
+
+
+def check_subreddit_instance(subreddit: praw.models.Subreddit):
+    try:
+        subreddit.created_utc
+    except (prawcore.exceptions.Redirect, prawcore.exceptions.NotFound) as e:
+        logging.error(f"Cannot find subreddit {config.SUBREDDIT}")
+        raise e
+    else:
+        logging.debug(f"Successfully connected to subreddit {subreddit.display_name}")
+
+    if "modposts" in reddit.auth.scopes() and config.USERNAME not in subreddit.moderator():
+        logging.warning(f"{config.USERNAME} has post removal scope, but is not a moderator of "
+                        f"{subreddit.display_name}. They will not be able to remove submission to the sub.")
+
+
 def generate_message_params(post_ids: List[str]) -> dict:
     return {
         "post_ids": str(post_ids),
@@ -115,6 +161,10 @@ def generate_message_params(post_ids: List[str]) -> dict:
         "report_threshold": config.REPORT_THRESHOLD,
         "remove_threshold": config.REMOVE_THRESHOLD,
     }
+
+
+class MissingScopesException(Exception):
+    pass
 
 
 if __name__ == "__main__":
