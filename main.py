@@ -44,8 +44,12 @@ def main():
             first, extra = get_redis_posts(author)
             if config.REPORT_ALL:
                 remove_posts([first] + extra)
+                if config.SEND_MODMAIL:
+                    send_modmail([first] + extra)
             else:
                 remove_posts(extra)
+                if config.SEND_MODMAIL:
+                    send_modmail(extra)
 
         elif num_user_posts >= config.REPORT_THRESHOLD:
             logging.info(f"{author} exceeded REPORT_THRESHOLD ({config.REPORT_THRESHOLD})")
@@ -92,6 +96,15 @@ def report_posts(post_ids: List[str]):
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
         post.report(config.REPORT_MESSAGE.format(**message_parameters))
+
+
+def send_modmail(post_ids: List[str]):
+    logging.info(f"Sending modmail to {config.SUBREDDIT}")
+    message_parameters = generate_message_params(post_ids)
+    reddit.subreddit(config.SUBREDDIT).message(
+        config.MODMAIL_SUBJECT.format(**message_parameters),
+        config.MODMAIL_MESSAGE.format(**message_parameters)
+    )
 
 
 def generate_message_params(post_ids: List[str]) -> dict:
