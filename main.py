@@ -25,6 +25,7 @@ reddit = praw.Reddit(client_id=config.CLIENT_ID,
 
 
 def main():
+    check_custom_messages()
     check_redis()
     check_reddit_user_scopes()
     subreddit: Subreddit = reddit.subreddit(config.SUBREDDIT)
@@ -114,7 +115,38 @@ def send_modmail(post_ids: List[str]):
     )
 
 
+def generate_message_params(post_ids: List[str]) -> dict:
+    return {
+        "post_ids": str(post_ids),
+        "num_posts": len(post_ids),
+        "period": config.PERIOD_HOURS,
+        "report_threshold": config.REPORT_THRESHOLD,
+        "remove_threshold": config.REMOVE_THRESHOLD,
+    }
+
+
 # Set up checks
+def check_custom_messages():
+    fake_params = generate_message_params([])
+
+    try:
+        config.REPORT_MESSAGE.format(**fake_params)
+    except KeyError as e:
+        raise InvalidMessageParameterException(f"{e} in REPORT_MESSAGE is not a valid message parameter")
+    try:
+        config.REMOVE_MESSAGE.format(**fake_params)
+    except KeyError as e:
+        raise InvalidMessageParameterException(f"{e} in REMOVE_MESSAGE is not a valid message parameter")
+    try:
+        config.MODMAIL_SUBJECT.format(**fake_params)
+    except KeyError as e:
+        raise InvalidMessageParameterException(f"{e} in MODMAIL_SUBJECT is not a valid message parameter")
+    try:
+        config.MODMAIL_MESSAGE.format(**fake_params)
+    except KeyError as e:
+        raise InvalidMessageParameterException(f"{e} in MODMAIL_MESSAGE is not a valid message parameter")
+
+
 def check_redis():
     r.ping()
     logging.debug(f"Connected to redis on {config.REDIS_HOST}:{config.REDIS_PORT}")
@@ -153,17 +185,11 @@ def check_subreddit_instance(subreddit: praw.models.Subreddit):
                         f"{subreddit.display_name}. They will not be able to remove submission to the sub.")
 
 
-def generate_message_params(post_ids: List[str]) -> dict:
-    return {
-        "post_ids": str(post_ids),
-        "num_posts": len(post_ids),
-        "period": config.PERIOD_HOURS,
-        "report_threshold": config.REPORT_THRESHOLD,
-        "remove_threshold": config.REMOVE_THRESHOLD,
-    }
-
-
 class MissingScopesException(Exception):
+    pass
+
+
+class InvalidMessageParameterException(Exception):
     pass
 
 
