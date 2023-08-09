@@ -1,0 +1,13 @@
+{
+    "enabled": true,
+    "period_hours": 24,
+    "report_all": true,
+    "send_modmail": true,
+    "report_threshold": 1,
+    "remove_threshold": 1,
+    "report_message": "EP {num_posts}/{report_threshold} | {post_ids} in {period}h",
+    "remove_message": "(Auto) EP {num_posts}/{report_threshold} | {post_ids} in {period}h",
+    "modmail_subject": "Test subject line {num_posts}/{remove_threshold}",
+    "modmail_message": "Test modmail message"
+}
+

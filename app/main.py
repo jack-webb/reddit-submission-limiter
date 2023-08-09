@@ -3,9 +3,11 @@ import praw
 import prawcore
 import redis
 import logging
-import config
+import localconfig
 import time
 from praw.models import Submission, Subreddit
+
+from app.RemoteConfig import RemoteConfig
 
 """
 Reddit Submission Limiter by Jack Webb
@@ -15,29 +17,38 @@ Released under MIT license, see LICENSE file
 
 logging.basicConfig(level=logging.INFO)
 
-r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
-reddit = praw.Reddit(client_id=config.CLIENT_ID,
-                     client_secret=config.CLIENT_SECRET,
-                     username=config.USERNAME,
-                     password=config.PASSWORD,
-                     redirect_uri=config.REDIRECT_URI,
-                     user_agent=config.USER_AGENT)
+r = redis.Redis(host=localconfig.REDIS_HOST, port=localconfig.REDIS_PORT, decode_responses=True)
+reddit = praw.Reddit(client_id=localconfig.CLIENT_ID,
+                     client_secret=localconfig.CLIENT_SECRET,
+                     username=localconfig.USERNAME,
+                     password=localconfig.PASSWORD,
+                     redirect_uri=localconfig.REDIRECT_URI,
+                     user_agent=localconfig.USER_AGENT)
+
+# todo Nicer way to init and use remote config object
+rc = RemoteConfig(reddit.subreddit(localconfig.SUBREDDIT), 'rsl-configuration')
 
 
 def main():
+    subreddit: Subreddit = reddit.subreddit(localconfig.SUBREDDIT)
+    check_subreddit_instance(subreddit)
+
     check_custom_messages()
     check_redis()
     check_reddit_user_scopes()
-    subreddit: Subreddit = reddit.subreddit(config.SUBREDDIT)
-    check_subreddit_instance(subreddit)
 
     ready: str = f"RSL is logged in as {reddit.user.me().name} and listening in /r/{subreddit.display_name}"
     logging.info(ready)
     logging.info(f"=>{'~' * (len(ready) - 4)}<=")  # Pretty divider for post-init logs
 
     for post in subreddit.stream.submissions(skip_existing=True):
-        if post.created_utc < time.time() - config.PERIOD_HOURS * 60 * 60:
+        print(rc.config)
+        if post.created_utc < time.time() - rc.config.period_hours * 60 * 60:
             # Ignore stream items older than the period
+            continue
+
+        if rc.config.enabled == False:
+            # The bot has been disabled from the remote rc
             continue
 
         author: str = post.author.name
@@ -45,24 +56,24 @@ def main():
         logging.debug(f"NEW POST: {author} has made {num_user_posts} posts")
 
         if num_user_posts == 1:
-            r.expire(author, config.PERIOD_HOURS * 60 * 60)
+            r.expire(author, rc.config.period_hours * 60 * 60)
 
-        elif num_user_posts >= config.REMOVE_THRESHOLD:
-            logging.info(f"{author} exceeded REMOVE_THRESHOLD ({config.REMOVE_THRESHOLD})")
+        elif num_user_posts >= rc.config.remove_threshold:
+            logging.info(f"{author} exceeded remove_threshold ({rc.config.remove_threshold})")
             first, extra = get_redis_posts(author)
-            if config.REPORT_ALL:
+            if rc.config.report_all:
                 remove_posts([first] + extra)
-                if config.SEND_MODMAIL:
+                if rc.config.send_modmail:
                     send_modmail([first] + extra)
             else:
                 remove_posts(extra)
-                if config.SEND_MODMAIL:
+                if rc.config.send_modmail:
                     send_modmail(extra)
 
-        elif num_user_posts >= config.REPORT_THRESHOLD:
-            logging.info(f"{author} exceeded REPORT_THRESHOLD ({config.REPORT_THRESHOLD})")
+        elif num_user_posts >= rc.config.report_threshold:
+            logging.info(f"{author} exceeded report_threshold ({rc.config.report_threshold})")
             first, extra = get_redis_posts(author)
-            if config.REPORT_ALL:
+            if rc.config.report_all:
                 report_posts([first] + extra)
             else:
                 report_posts(extra)
@@ -90,7 +101,7 @@ def remove_posts(post_ids: List[str]):
     message_parameters = generate_message_params(post_ids)
     for post in posts:
         logging.debug(f"Removing post {post.id} ({post.title})")
-        post.mod.remove(spam=False, mod_note=config.REMOVE_MESSAGE.format(**message_parameters))
+        post.mod.remove(spam=False, mod_note=rc.config.remove_message.format(**message_parameters)[100:])
 
 
 def report_posts(post_ids: List[str]):
@@ -103,15 +114,15 @@ def report_posts(post_ids: List[str]):
     message_parameters = generate_message_params(post_ids)
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
-        post.report(config.REPORT_MESSAGE.format(**message_parameters))
+        post.report(rc.config.report_message.format(**message_parameters))
 
 
 def send_modmail(post_ids: List[str]):
-    logging.info(f"Sending modmail to {config.SUBREDDIT}")
+    logging.info(f"Sending modmail to {localconfig.SUBREDDIT}")
     message_parameters = generate_message_params(post_ids)
-    reddit.subreddit(config.SUBREDDIT).message(
-        config.MODMAIL_SUBJECT.format(**message_parameters),
-        config.MODMAIL_MESSAGE.format(**message_parameters)
+    reddit.subreddit(localconfig.SUBREDDIT).message(
+        rc.config.modmail_subject.format(**message_parameters),
+        rc.config.modmail_message.format(**message_parameters)
     )
 
 
@@ -119,55 +130,57 @@ def generate_message_params(post_ids: List[str]) -> dict:
     return {
         "post_ids": str(post_ids),
         "num_posts": len(post_ids),
-        "period": config.PERIOD_HOURS,
-        "report_threshold": config.REPORT_THRESHOLD,
-        "remove_threshold": config.REMOVE_THRESHOLD,
+        "period": rc.config.period_hours,
+        "report_threshold": rc.config.report_threshold,
+        "remove_threshold": rc.config.remove_threshold,
     }
 
 
-# Set up checks
+# This is done in the remote config helper now, this could should be migrated
 def check_custom_messages():
-    fake_params = generate_message_params([])
+    pass
+    # fake_params = generate_message_params([])
 
-    try:
-        config.REPORT_MESSAGE.format(**fake_params)
-    except KeyError as e:
-        raise InvalidMessageParameterException(f"{e} in REPORT_MESSAGE is not a valid message parameter")
-    try:
-        config.REMOVE_MESSAGE.format(**fake_params)
-    except KeyError as e:
-        raise InvalidMessageParameterException(f"{e} in REMOVE_MESSAGE is not a valid message parameter")
-    try:
-        config.MODMAIL_SUBJECT.format(**fake_params)
-    except KeyError as e:
-        raise InvalidMessageParameterException(f"{e} in MODMAIL_SUBJECT is not a valid message parameter")
-    try:
-        config.MODMAIL_MESSAGE.format(**fake_params)
-    except KeyError as e:
-        raise InvalidMessageParameterException(f"{e} in MODMAIL_MESSAGE is not a valid message parameter")
+    # try:
+    #     rc.config.report_message.format(**fake_params)
+    # except KeyError as e:
+    #     raise InvalidMessageParameterException(f"{e} in REPORT_MESSAGE is not a valid message parameter")
+    # try:
+    #     rc.config.remove_message.format(**fake_params)
+    # except KeyError as e:
+    #     raise InvalidMessageParameterException(f"{e} in REMOVE_MESSAGE is not a valid message parameter")
+    # try:
+    #     rc.config.modmail_subject.format(**fake_params)
+    # except KeyError as e:
+    #     raise InvalidMessageParameterException(f"{e} in MODMAIL_SUBJECT is not a valid message parameter")
+    # try:
+    #     rc.config.modmail_message.format(**fake_params)
+    # except KeyError as e:
+    #     raise InvalidMessageParameterException(f"{e} in MODMAIL_MESSAGE is not a valid message parameter")
 
 
 def check_redis():
     r.ping()
-    logging.debug(f"Connected to redis on {config.REDIS_HOST}:{config.REDIS_PORT}")
+    logging.debug(f"Connected to redis on {localconfig.REDIS_HOST}:{localconfig.REDIS_PORT}")
 
 
+# todo Update to include wiki read for its config page
 def check_reddit_user_scopes():
     scopes: dict = reddit.auth.scopes()
     required_scopes: Set[str] = {"modposts", "report", "privatemessages"}
     if scopes == {"*"}:
-        logging.debug(f"Logged into reddit as {config.USERNAME} with all scopes")
+        logging.debug(f"Logged into reddit as {localconfig.USERNAME} with all scopes")
     elif all(scope in scopes for scope in required_scopes):
-        logging.debug(f"Logged into reddit as {config.USERNAME} with sufficient scopes")
+        logging.debug(f"Logged into reddit as {localconfig.USERNAME} with sufficient scopes")
     else:
         missing_scopes: Set[str] = set(scopes) - required_scopes
         if len(missing_scopes) == len(required_scopes):
-            raise MissingScopesException(f"Logged into reddit as {config.USERNAME}, but all scopes are missing. The "
+            raise MissingScopesException(f"Logged into reddit as {localconfig.USERNAME}, but with no required scopes. The "
                                          f"bot will not work without these scopes. See the RSL documentation and "
                                          f"https://github.com/reddit-archive/reddit/wiki/OAuth2-Quick-Start-Example\n"
-                                         f"Required scopes {required_scopes}, or *")
+                                         f"Required scopes {required_scopes}, or all with *")
         else:
-            logging.warning(f"Logged into reddit as {config.USERNAME}, but some scopes are missing. Some functionality "
+            logging.warning(f"Logged into reddit as {localconfig.USERNAME}, but some scopes are missing. Some functionality "
                             f"will be unavailable. Missing {missing_scopes}")
 
 
@@ -175,13 +188,13 @@ def check_subreddit_instance(subreddit: praw.models.Subreddit):
     try:
         subreddit.created_utc
     except (prawcore.exceptions.Redirect, prawcore.exceptions.NotFound) as e:
-        logging.error(f"Cannot find subreddit {config.SUBREDDIT}")
+        logging.error(f"Cannot find subreddit {localconfig.SUBREDDIT}")
         raise e
     else:
         logging.debug(f"Successfully connected to subreddit {subreddit.display_name}")
 
-    if "modposts" in reddit.auth.scopes() and config.USERNAME not in subreddit.moderator():
-        logging.warning(f"{config.USERNAME} has post removal scope, but is not a moderator of "
+    if "modposts" in reddit.auth.scopes() and localconfig.USERNAME not in subreddit.moderator():
+        logging.warning(f"{localconfig.USERNAME} has post removal scope, but is not a moderator of "
                         f"{subreddit.display_name}. They will not be able to remove submission to the sub.")
 
 
