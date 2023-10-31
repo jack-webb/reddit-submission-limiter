@@ -17,7 +17,7 @@ Uses PRAW and Redis.
    - **Subreddit** is _just_ the sub's name (i.e. `AskReddit`, not `/r/AskReddit`)
    - **Config wiki page** is everything after `/r/subreddit/wiki/` in the URL of your page
 4. Run `pipenv install`
-5. Run `pipenv run python -m main`
+5. Run `pipenv run python -m app.main`
 
 ### Remote Configuration
 Core functionality of the bot is managed from your subreddit wiki, using a JSON object with the configurable parameters. The bot loads config from this page on launch, or when messaged with 'reload' as the subject.

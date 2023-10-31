@@ -6,11 +6,6 @@ from praw.models import Subreddit
 
 from app.SubredditConfig import SubredditConfig
 
-
-# todo Expect the config wikipage not to be public, need to account for that in bot perms
-# todo handling if the config page doesn't exist
-# todo (better) handling if the config page is empty
-
 class RemoteConfig:
 
     def __init__(self, subreddit: Subreddit, config_page: str, bot_name: str):
@@ -32,7 +27,7 @@ class RemoteConfig:
 
     def _get_remote_config(self) -> Optional[dict]:
         try:
-            config_page = self.subreddit.wiki[self.config_page]  # todo Create and modmail if config page doesn't exist?
+            config_page = self.subreddit.wiki[self.config_page]
             config = json.loads(config_page.content_md)
             if self.validate(config):
                 return config

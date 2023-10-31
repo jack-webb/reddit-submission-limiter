@@ -199,14 +199,13 @@ def check_redis():
     logging.debug(f"Connected to redis on {localconfig.REDIS_HOST}:{localconfig.REDIS_PORT}")
 
 
-# todo Update to include wiki read for its config page
 def check_reddit_user_scopes():
     scopes: dict = reddit.auth.scopes()
-    required_scopes: Set[str] = {"modposts", "report", "privatemessages"}
+    required_scopes: Set[str] = {"modposts", "report", "privatemessages", "wikiread"}
     if scopes == {"*"}:
-        logging.debug(f"Logged into reddit as {localconfig.USERNAME} with all scopes")
+        logging.debug(f"Logged into reddit as {localconfig.USERNAME} with all (*) scopes")
     elif all(scope in scopes for scope in required_scopes):
-        logging.debug(f"Logged into reddit as {localconfig.USERNAME} with sufficient scopes")
+        logging.debug(f"Logged into reddit as {localconfig.USERNAME} with all required scopes")
     else:
         missing_scopes: Set[str] = set(scopes) - required_scopes
         if len(missing_scopes) == len(required_scopes):
