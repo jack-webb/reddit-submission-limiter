@@ -1,5 +1,5 @@
 # reddit-submission-limiter (RSL)
-Limits the number of submissions per user to a subreddit in a given timeframe. Uses PRAW and Redis.
+Limits the number of submissions per user to a subreddit in a given timeframe, by reporting, filtering and removing excess posts. Uses a rolling window to count posts in a specified number of hours, with adjustable thresholds.  Uses PRAW and Redis.
 
 ### Requirements
 - A reddit user and accompanying script app with scopes for reporting and removing posts. See the [PRAW documentation](https://praw.readthedocs.io/en/latest/index.html) for details on this.

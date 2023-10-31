@@ -7,6 +7,7 @@ import localconfig
 import time
 from praw.models import Submission, Subreddit
 
+from app.InboxHandler import InboxHandler
 from app.RemoteConfig import RemoteConfig
 
 """
@@ -15,7 +16,7 @@ https://github.com/jack-webb/reddit-submision-limiter
 Released under MIT license, see LICENSE file
 """
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 r = redis.Redis(host=localconfig.REDIS_HOST, port=localconfig.REDIS_PORT, decode_responses=True)
 reddit = praw.Reddit(client_id=localconfig.CLIENT_ID,
@@ -25,9 +26,7 @@ reddit = praw.Reddit(client_id=localconfig.CLIENT_ID,
                      redirect_uri=localconfig.REDIRECT_URI,
                      user_agent=localconfig.USER_AGENT)
 
-# todo Nicer way to init and use remote config object
-rc = RemoteConfig(reddit.subreddit(localconfig.SUBREDDIT), 'rsl-configuration')
-
+rc = RemoteConfig(reddit.subreddit(localconfig.SUBREDDIT), 'rsl-configuration', reddit.user.me().name)
 
 def main():
     subreddit: Subreddit = reddit.subreddit(localconfig.SUBREDDIT)
@@ -37,47 +36,82 @@ def main():
     check_redis()
     check_reddit_user_scopes()
 
-    ready: str = f"RSL is logged in as {reddit.user.me().name} and listening in /r/{subreddit.display_name}"
-    logging.info(ready)
-    logging.info(f"=>{'~' * (len(ready) - 4)}<=")  # Pretty divider for post-init logs
+    bot_ready: str = f"RSL is logged in as {reddit.user.me().name} and listening in /r/{subreddit.display_name}"
+    logging.info(bot_ready)
 
-    for post in subreddit.stream.submissions(skip_existing=True):
-        print(rc.config)
-        if post.created_utc < time.time() - rc.config.period_hours * 60 * 60:
+    config_ready: str = (f"RSL is using the configuration from https://reddit.com/r/{subreddit.display_name}/wiki/rsl-configuration/")
+    logging.info(config_ready)
+
+    inbox_handler_ready: str = (f"RSL is listening for configuration updates. Send a message to /u/{reddit.user.me().name} "
+                                f"with the subject 'reload' after updating the configuration page.")
+    inbox_handler = InboxHandler(subreddit, rc)
+    logging.info(inbox_handler_ready)
+
+    div_length = max(len(bot_ready), len(config_ready), len(inbox_handler_ready)) - 4
+    logging.info(f"=>{'~' * div_length}<=")  # Pretty divider for post-init logs
+
+    while True:
+        try:
+            inbox_stream = reddit.inbox.stream(skip_existing=True, pause_after=-1)
+            submission_stream = subreddit.stream.submissions(skip_existing=True, pause_after=-1)
+            while True:
+                check_inbox(inbox_stream, inbox_handler)
+                check_submissions(submission_stream)
+        except Exception as e:
+            logging.warning(f"Server error: {e}")
+            logging.warning("Restarting streams...")
+
+
+def check_inbox(stream, inbox_handler):
+    for message in stream:
+        if message is None:
+            logging.info("No inbox messages in stream")
+            break
+        logging.debug(f"Received message from {message.author}!!!")
+        inbox_handler.handle(message)
+
+def check_submissions(stream):
+    for post in stream:
+        if post is None:
+            logging.info("No submissions in stream")
+            break
+
+        if post.created_utc < time.time() - rc.config.PERIOD_HOURS * 60 * 60:
             # Ignore stream items older than the period
             continue
 
-        if rc.config.enabled == False:
-            # The bot has been disabled from the remote rc
+        if not rc.config.ENABLED:
+            # The bot has been disabled from the remote config
+            # Skip this submission entirely
+            # todo Should we apply this at the remove/report level instead, to maintain tracking?
             continue
 
         author: str = post.author.name
         num_user_posts: int = r.rpush(author, post.id)
-        logging.debug(f"NEW POST: {author} has made {num_user_posts} posts")
+        logging.info(f"New Post from {author}, who has made {num_user_posts} posts")
 
         if num_user_posts == 1:
-            r.expire(author, rc.config.period_hours * 60 * 60)
+            r.expire(author, rc.config.PERIOD_HOURS * 60 * 60)
 
-        elif num_user_posts >= rc.config.remove_threshold:
-            logging.info(f"{author} exceeded remove_threshold ({rc.config.remove_threshold})")
+        elif num_user_posts >= rc.config.REMOVE_THRESHOLD:
+            logging.info(f"{author} has exceeded remove_threshold ({rc.config.REMOVE_THRESHOLD})")
             first, extra = get_redis_posts(author)
-            if rc.config.report_all:
+            if rc.config.REPORT_ALL:
                 remove_posts([first] + extra)
-                if rc.config.send_modmail:
+                if rc.config.SEND_MODMAIL:
                     send_modmail([first] + extra)
             else:
                 remove_posts(extra)
-                if rc.config.send_modmail:
+                if rc.config.SEND_MODMAIL:
                     send_modmail(extra)
 
-        elif num_user_posts >= rc.config.report_threshold:
-            logging.info(f"{author} exceeded report_threshold ({rc.config.report_threshold})")
+        elif num_user_posts >= rc.config.REPORT_THRESHOLD:
+            logging.info(f"{author} has exceeded report_threshold ({rc.config.REPORT_THRESHOLD})")
             first, extra = get_redis_posts(author)
-            if rc.config.report_all:
+            if rc.config.REPORT_ALL:
                 report_posts([first] + extra)
             else:
                 report_posts(extra)
-
 
 def get_redis_posts(author: str) -> (str, str):
     """Return user's first and other post IDs
@@ -101,7 +135,7 @@ def remove_posts(post_ids: List[str]):
     message_parameters = generate_message_params(post_ids)
     for post in posts:
         logging.debug(f"Removing post {post.id} ({post.title})")
-        post.mod.remove(spam=False, mod_note=rc.config.remove_message.format(**message_parameters)[100:])
+        post.mod.remove(spam=False, mod_note=rc.config.REMOVE_MESSAGE.format(**message_parameters)[100:])
 
 
 def report_posts(post_ids: List[str]):
@@ -114,15 +148,15 @@ def report_posts(post_ids: List[str]):
     message_parameters = generate_message_params(post_ids)
     for post in posts:
         logging.debug(f"Reporting post {post.id} ({post.title})")
-        post.report(rc.config.report_message.format(**message_parameters))
+        post.report(rc.config.REPORT_MESSAGE.format(**message_parameters))
 
 
 def send_modmail(post_ids: List[str]):
     logging.info(f"Sending modmail to {localconfig.SUBREDDIT}")
     message_parameters = generate_message_params(post_ids)
     reddit.subreddit(localconfig.SUBREDDIT).message(
-        rc.config.modmail_subject.format(**message_parameters),
-        rc.config.modmail_message.format(**message_parameters)
+        rc.config.MODMAIL_SUBJECT.format(**message_parameters),
+        rc.config.MODMAIL_MESSAGE.format(**message_parameters)
     )
 
 
@@ -130,31 +164,31 @@ def generate_message_params(post_ids: List[str]) -> dict:
     return {
         "post_ids": str(post_ids),
         "num_posts": len(post_ids),
-        "period": rc.config.period_hours,
-        "report_threshold": rc.config.report_threshold,
-        "remove_threshold": rc.config.remove_threshold,
+        "period": rc.config.PERIOD_HOURS,
+        "report_threshold": rc.config.REPORT_THRESHOLD,
+        "remove_threshold": rc.config.REMOVE_THRESHOLD,
     }
 
 
-# This is done in the remote config helper now, this could should be migrated
+# This needs to be added to the remote config validation
 def check_custom_messages():
     pass
     # fake_params = generate_message_params([])
 
     # try:
-    #     rc.config.report_message.format(**fake_params)
+    #     rc.config.REPORT_MESSAGE.format(**fake_params)
     # except KeyError as e:
     #     raise InvalidMessageParameterException(f"{e} in REPORT_MESSAGE is not a valid message parameter")
     # try:
-    #     rc.config.remove_message.format(**fake_params)
+    #     rc.config.REMOVE_MESSAGE.format(**fake_params)
     # except KeyError as e:
     #     raise InvalidMessageParameterException(f"{e} in REMOVE_MESSAGE is not a valid message parameter")
     # try:
-    #     rc.config.modmail_subject.format(**fake_params)
+    #     rc.config.MODMAIL_SUBJECT.format(**fake_params)
     # except KeyError as e:
     #     raise InvalidMessageParameterException(f"{e} in MODMAIL_SUBJECT is not a valid message parameter")
     # try:
-    #     rc.config.modmail_message.format(**fake_params)
+    #     rc.config.MODMAIL_MESSAGE.format(**fake_params)
     # except KeyError as e:
     #     raise InvalidMessageParameterException(f"{e} in MODMAIL_MESSAGE is not a valid message parameter")
 
