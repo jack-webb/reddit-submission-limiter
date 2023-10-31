@@ -26,7 +26,7 @@ reddit = praw.Reddit(client_id=localconfig.CLIENT_ID,
                      redirect_uri=localconfig.REDIRECT_URI,
                      user_agent=localconfig.USER_AGENT)
 
-rc = RemoteConfig(reddit.subreddit(localconfig.SUBREDDIT), 'rsl-configuration', reddit.user.me().name)
+rc = RemoteConfig(reddit.subreddit(localconfig.SUBREDDIT), localconfig.CONFIG_WIKI_PAGE, reddit.user.me().name)
 
 def main():
     subreddit: Subreddit = reddit.subreddit(localconfig.SUBREDDIT)
