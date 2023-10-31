@@ -31,6 +31,7 @@ rc = RemoteConfig(reddit.subreddit(localconfig.SUBREDDIT), localconfig.CONFIG_WI
 def main():
     subreddit: Subreddit = reddit.subreddit(localconfig.SUBREDDIT)
     check_subreddit_instance(subreddit)
+    check_bot_moderation_permissions(subreddit)
 
     check_custom_messages()
     check_redis()
@@ -227,10 +228,16 @@ def check_subreddit_instance(subreddit: praw.models.Subreddit):
     else:
         logging.debug(f"Successfully connected to subreddit {subreddit.display_name}")
 
-    if "modposts" in reddit.auth.scopes() and localconfig.USERNAME not in subreddit.moderator():
-        logging.warning(f"{localconfig.USERNAME} has post removal scope, but is not a moderator of "
-                        f"{subreddit.display_name}. They will not be able to remove submission to the sub.")
+def check_bot_moderation_permissions(subreddit: praw.models.Subreddit):
+    bot_moderation_permissions = None
+    for user in subreddit.moderator():
+        if user.name == localconfig.USERNAME:
+            bot_moderation_permissions = user.mod_permissions
+            break
 
+    if "modposts" in reddit.auth.scopes() and "posts" not in bot_moderation_permissions:
+        logging.warning(f"{localconfig.USERNAME} has post removal scope, but is not a moderator of "
+                        f"{subreddit.display_name}. They will not be able to remove submissions in this subreddit.")
 
 class MissingScopesException(Exception):
     pass
