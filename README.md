@@ -49,3 +49,6 @@ For example:
   "remove_message": "User exceeded limit of {remove_threshold} posts in {period}h"
 }
 ```
+
+### Userscript
+There is a companion userscript that will turn IDs in report reasons into clickable reddit links. Paste the contents of `userscript.js` into a new userscript in your manager (e.g. [Violentmonkey](https://violentmonkey.github.io/)), replace the bot username constant, then save.
