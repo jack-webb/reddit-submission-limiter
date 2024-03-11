@@ -20,7 +20,7 @@ Uses PRAW and Redis.
 5. Run `pipenv install`
 6. Run `pipenv run python -m app.main`
 
-The bot is now running. It will track submissions make to /new over time, and action posts that exceed the thresholds set in config.
+The bot is now running. It will track submissions made to /new over time, and action posts that exceed the thresholds set in config.
 
 ## Remote Configuration
 Core functionality of the bot is managed from your subreddit wiki, using a JSON object with the configurable parameters. **The bot loads config** from this page on launch, or **when messaged with 'reload' as the subject**.
